@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>24点求解器</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .inputs {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+        .inputs input {
+            width: 80px;
+            padding: 10px;
+            font-size: 18px;
+            text-align: center;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            outline: none;
+            transition: 0.2s;
+        }
+        .inputs input:focus {
+            border-color: #3498db;
+            box-shadow: 0 0 5px rgba(52,152,219,0.3);
+        }
+        button {
+            display: block;
+            width: 150px;
+            margin: 0 auto 25px;
+            padding: 10px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        .result {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+        }
+        .result p {
+            margin: 8px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            padding: 5px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .result p:last-child {
+            border-bottom: none;
+        }
+        .no-solution {
+            text-align: center;
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .loading {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        hr {
+            margin: 20px 0;
+            border: 0;
+            border-top: 1px solid #e9ecef;
+        }
+        .note {
+            font-size: 14px;
+            color: #6c757d;
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🔢 24点求解器</h1>
+    <div class="inputs">
+        <input type="number" id="num1" value="3" min="1" max="13" step="1">
+        <input type="number" id="num2" value="3" min="1" max="13" step="1">
+        <input type="number" id="num3" value="8" min="1" max="13" step="1">
+        <input type="number" id="num4" value="8" min="1" max="13" step="1">
+    </div>
+    <button id="solveBtn">求 解</button>
+    <div id="resultArea" class="result">
+        <p class="loading">点击按钮开始求解...</p>
+    </div>
+    <div class="note">
+        ⚡ 规则：只能使用整数加减乘除，中间过程不能出现负数，除法必须整除。<br>
+        🧠 算法枚举所有运算符组合与数字排列，用栈模拟计算（逆波兰表达式），输出所有不同解。
+    </div>
+</div>
+
+<script>
+    // 主求解函数
+    function solve24(nums) {
+        // 运算符集合
+        const ops = ['+', '-', '*', '/'];
+        const results = new Set();  // 存储唯一的中缀表达式
+
+        // 检查一个逆波兰序列是否合法并返回计算结果（若合法且结果为24则返回true）
+        function isValidAnd24(seq) {
+            const stack = [];
+            for (const token of seq) {
+                if (typeof token === 'number') {
+                    stack.push(token);
+                } else {
+                    if (stack.length < 2) return false;
+                    const b = stack.pop();
+                    const a = stack.pop();
+                    switch (token) {
+                        case '+':
+                            stack.push(a + b);
+                            break;
+                        case '-':
+                            if (a < b) return false;   // 减法结果不能为负
+                            stack.push(a - b);
+                            break;
+                        case '*':
+                            stack.push(a * b);
+                            break;
+                        case '/':
+                            if (b === 0 || a % b !== 0 || a / b < 0) return false; // 整除且非负
+                            stack.push(Math.floor(a / b));
+                            break;
+                        default:
+                            return false;
+                    }
+                }
+            }
+            return stack.length === 1 && Math.abs(stack[0] - 24) < 1e-6;
+        }
+
+        // 将逆波兰序列转换为中缀表达式（带括号）
+        function toInfix(seq) {
+            const stack = [];
+            for (const token of seq) {
+                if (typeof token === 'number') {
+                    stack.push(token.toString());
+                } else {
+                    const b = stack.pop();
+                    const a = stack.pop();
+                    // 为了保证运算顺序，给左右子表达式加括号
+                    const expr = `(${a}${token}${b})`;
+                    stack.push(expr);
+                }
+            }
+            return stack[0];
+        }
+
+        // 生成所有排列（Heap算法，避免递归过深）
+        function permuteUnique(arr) {
+            const result = [];
+            const used = Array(arr.length).fill(false);
+            const current = [];
+
+            function backtrack() {
+                if (current.length === arr.length) {
+                    result.push([...current]);
+                    return;
+                }
+                for (let i = 0; i < arr.length; i++) {
+                    if (used[i]) continue;
+                    // 去重：如果和前一个相同且前一个未使用，则跳过（避免相同数字的重复排列）
+                    if (i > 0 && arr[i] === arr[i-1] && !used[i-1]) continue;
+                    used[i] = true;
+                    current.push(arr[i]);
+                    backtrack();
+                    current.pop();
+                    used[i] = false;
+                }
+            }
+            // 先排序，便于去重
+            arr.sort((a,b) => a-b);
+            backtrack();
+            return result;
+        }
+
+        // 枚举所有运算符组合
+        const opCombinations = [];
+        for (const op1 of ops) {
+            for (const op2 of ops) {
+                for (const op3 of ops) {
+                    opCombinations.push([op1, op2, op3]);
+                }
+            }
+        }
+
+        // 对每个运算符组合
+        for (const opsCombo of opCombinations) {
+            // 混合数组：四个数字 + 三个运算符
+            const mixed = [...nums, ...opsCombo];
+            // 对混合数组去重排列（利用排序后去重）
+            const permutations = permuteUnique(mixed);
+            for (const perm of permutations) {
+                if (isValidAnd24(perm)) {
+                    const expr = toInfix(perm);
+                    results.add(expr);
+                }
+            }
+        }
+
+        return Array.from(results).sort();
+    }
+
+    // 界面交互
+    document.getElementById('solveBtn').addEventListener('click', () => {
+        const num1 = parseInt(document.getElementById('num1').value);
+        const num2 = parseInt(document.getElementById('num2').value);
+        const num3 = parseInt(document.getElementById('num3').value);
+        const num4 = parseInt(document.getElementById('num4').value);
+        const nums = [num1, num2, num3, num4];
+
+        // 简单验证
+        if (nums.some(n => isNaN(n) || n < 1 || n > 13)) {
+            document.getElementById('resultArea').innerHTML = '<p class="no-solution">⚠️ 请输入 1~13 之间的整数！</p>';
+            return;
+        }
+
+        const resultDiv = document.getElementById('resultArea');
+        resultDiv.innerHTML = '<p class="loading">🔄 计算中，请稍候...</p>';
+
+        // 使用 setTimeout 避免界面卡死（计算量稍大）
+        setTimeout(() => {
+            const solutions = solve24(nums);
+            if (solutions.length === 0) {
+                resultDiv.innerHTML = '<p class="no-solution">😞 无解，换个数字试试吧~</p>';
+            } else {
+                let html = `<p>✅ 共找到 ${solutions.length} 个解：</p>`;
+                solutions.forEach(expr => {
+                    // 去掉最外层括号，更美观
+                    let cleanExpr = expr;
+                    if (cleanExpr.startsWith('(') && cleanExpr.endsWith(')')) {
+                        cleanExpr = cleanExpr.slice(1, -1);
+                    }
+                    html += `<p>${cleanExpr} = 24</p>`;
+                });
+                resultDiv.innerHTML = html;
+            }
+        }, 10);
+    });
+</script>
+</body>
+</html>
